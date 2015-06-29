@@ -1,5 +1,5 @@
-## Socket.io with JWT and Mongo
+## Socket.io with socket.io-express-session and Mongo
 
 - run npm install
-- create a .env file and put in the JWT_SECRET and SESSION_SECRET
+- create a .env file and put in the SESSION_SECRET
 - run nodemon
