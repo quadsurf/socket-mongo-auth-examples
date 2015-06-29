@@ -6,7 +6,7 @@ var io = require('socket.io')(http);
 var bodyParser = require("body-parser");
 var Session = require('express-session'),
     SessionStore = require('session-file-store')(Session);
-var session = Session({ secret: 'pass', resave: true, saveUninitialized: true });
+var session = Session({ secret: process.env.SESSION_SECRET, resave: true, saveUninitialized: true });
 
 var ios = require('socket.io-express-session');
 
@@ -22,7 +22,6 @@ app.use(session);
 io.use(ios(session));
 
 app.use(loginMiddleware);
-
 
 app.get('/', function(req,res){
   res.redirect('/login');
@@ -74,11 +73,11 @@ app.post('/login', function (req, res) {
 var logoutTimer;
 
 io.on('connection', function (socket) {
-    console.log("CONNECTED!");
-    console.log("THIS IS THE ID RIGHT NOW", socket.handshake.session.uid)
+    socket.on('isLoggedIn', function(){
+      return socket.handshake.session.uid;
+    });
     socket.on('loggedIn', function(){
       if(socket.handshake.session.uid ){
-        console.log("WE ALREADY HAVE AN ID!")
       clearTimeout(logoutTimer);
       socket.emit('alreadyLoggedIn');
       console.log("loggedIn Emitted!");
@@ -103,18 +102,18 @@ io.on('connection', function (socket) {
       io.emit("data", message, socket.handshake.session.name);
     });
     socket.on('disconnect', function(){
+      // if there is an id
       if(socket.handshake.session.uid){
-        console.log("disconnected");
+        // only delete after 4 seconds, in case they refresh
         logoutTimer = setTimeout(function(){
         delete socket.handshake.session.uid;
         delete socket.handshake.session.name;
         socket.handshake.session.save();
         console.log(socket.handshake.session);
-      }, 2000);
+      }, 4000);
       }
     });
   });
-
 
 
 http.listen(3000, function(){

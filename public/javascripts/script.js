@@ -1,36 +1,31 @@
 var token, socket, $errMessage;
 
-var socket = io.connect();
-
-function connect () {
-  console.log("JUST RAN CONNECT!")
-  console.log(socket);
-  socket.on('connect', function () {
-    console.log('connected');
-    socket.emit('loggedIn')
-  });
-  socket.on('disconnect', function () {
-    console.log('disconnected');
-  });
-  socket.on('data', function(msg, info){
-   $('#messages').append($('<li>').text(info + ": " +msg));
- });
-  socket.on('alreadyLoggedIn', function(){
-    if ($errMessage) $errMessage.remove();
-    $('#login').hide();
-    $('.signup').hide();
-    $('#message').show();
-    $('#logout').show();
-    $('#text').focus();
-  });
+// todo - make this faster
+function hideShowForms(){
+  if ($errMessage) $errMessage.remove();
+  $('#message').show();
+  $('#logout').show();
+  $('#login').hide();
+  $('.signup').hide();
+  $('#text').focus();
 }
 
-connect();
+socket = io.connect({'forceNew': true});
+// when we connect, see if they are already logged in
+
+socket.on('connect', function () {
+  if (socket.emit('isLoggedIn')) socket.emit('loggedIn');
+});
+socket.on('data', function(msg, info){
+ $('#messages').append($('<li>').text(info + ": " +msg));
+});
+socket.on('alreadyLoggedIn', function(){
+  hideShowForms();
+});
 
 $('#message').submit(function(e){
   e.preventDefault();
   var messageText = $("#text").val();
-  console.log(messageText);
   socket.emit("message", messageText);
   $("#text").val("");
 });
@@ -50,19 +45,13 @@ $('#login').submit(function (e) {
     url: '/login'
   }).done(function (result) {
     if ($errMessage) $errMessage.remove();
-                // token = result.token;
-                $('#message').show();
-                $('#logout').show();
-                $('#login').hide();
-                $('.signup').hide();
-                $('#text').focus();
-                connect();
-                socket.emit("login", result);
-              }).fail(function(err){
-                if ($errMessage) $errMessage.remove();
-                $errMessage = $("<h1>").text(err.responseText);
-                $errMessage.css("color","red");
-                $("body").append($errMessage);
-                $('#login')[0].reset();
-              });
-            });
+    hideShowForms();
+    socket.emit("login", result);
+  }).fail(function(err){
+    if ($errMessage) $errMessage.remove();
+    $errMessage = $("<h1>").text(err.responseText);
+    $errMessage.css("color","red");
+    $("body").append($errMessage);
+    $('#login')[0].reset();
+  });
+});
