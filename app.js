@@ -2,28 +2,27 @@ require("dotenv").load();
 var app = require('express')();
 var express = require("express");
 var http = require('http').Server(app);
-var socketIo = require('socket.io');
-var socketio_jwt = require('socketio-jwt');
-var jwt = require('jsonwebtoken');
 var io = require('socket.io')(http);
 var bodyParser = require("body-parser");
-var session = require("cookie-session");
+var Session = require('express-session'),
+    SessionStore = require('session-file-store')(Session);
+var session = Session({ secret: 'pass', resave: true, saveUninitialized: true });
 
-var jwt_secret = process.env.JWT_SECRET;
+var ios = require('socket.io-express-session');
 
 var db = require("./models");
 var loginMiddleware = require("./middleware/login");
+var token;
 
 app.set("view engine", "ejs");
 app.use(express.static(__dirname + '/public'));
 app.use(bodyParser.urlencoded({extended:true}));
 
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  name: "chocolate chipz"
-}));
+app.use(session);
+io.use(ios(session));
 
 app.use(loginMiddleware);
+
 
 app.get('/', function(req,res){
   res.redirect('/login');
@@ -34,6 +33,7 @@ app.get('/signup' ,function(req,res){
 });
 
 app.get('/login', function(req,res){
+
   res.render('login');
 });
 
@@ -56,7 +56,6 @@ app.get('/logout', function(req,res){
 });
 
 app.post('/login', function (req, res) {
-
   db.User.authenticate(req.body.user,
    function (err, user) {
     if (err) {
@@ -64,23 +63,55 @@ app.post('/login', function (req, res) {
     }
      else if (!err && user !== null) {
        req.login(user);
-       var token = jwt.sign(user, jwt_secret, { expiresInMinutes: 60 });
-       res.json({token: token});
+       res.json(user);
      } else {
-       res.status(500).send("Something went wrong...");
+       res.status(400).send("Invalid username or Password");
      }
    });
 });
 
-io.use(socketio_jwt.authorize({
-  secret: jwt_secret,
-  handshake: true
-}));
+// Math.random().toString(36).substring(3,16) + +new Date
+var logoutTimer;
 
 io.on('connection', function (socket) {
-    console.log(socket.decoded_token.username, 'connected');
+    console.log("CONNECTED!");
+    console.log("THIS IS THE ID RIGHT NOW", socket.handshake.session.uid)
+    socket.on('loggedIn', function(){
+      if(socket.handshake.session.uid ){
+        console.log("WE ALREADY HAVE AN ID!")
+      clearTimeout(logoutTimer);
+      socket.emit('alreadyLoggedIn');
+      console.log("loggedIn Emitted!");
+      }
+    });
+
+    socket.on("login", function(result) {
+        socket.handshake.session.name = result.username;
+        socket.handshake.session.uid = result._id;
+        socket.handshake.session.save();
+        console.log("This is the logged in person!", socket.handshake.session);
+    });
+    socket.on("logout", function(result) {
+        if (socket.handshake.session.result) {
+            delete socket.handshake.session.name;
+            delete socket.handshake.session.uid;
+            // Save the data to the session store
+        socket.handshake.session.save();
+        }
+    });
     socket.on('message', function(message){
-      io.emit("data", message, socket.decoded_token.username);
+      io.emit("data", message, socket.handshake.session.name);
+    });
+    socket.on('disconnect', function(){
+      if(socket.handshake.session.uid){
+        console.log("disconnected");
+        logoutTimer = setTimeout(function(){
+        delete socket.handshake.session.uid;
+        delete socket.handshake.session.name;
+        socket.handshake.session.save();
+        console.log(socket.handshake.session);
+      }, 2000);
+      }
     });
   });
 

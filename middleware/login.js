@@ -1,11 +1,13 @@
 var loginMiddleware = function (req, res, next) {
 
   req.login = function (user) {
-    req.session.id = user._id;
+    req.session.uid = user._id;
+    req.session.name = user.username;
   };
 
   req.logout = function () {
-    req.session.id = null;
+    req.session.uid = null;
+    req.session.name = null;
   };
 
   next();
